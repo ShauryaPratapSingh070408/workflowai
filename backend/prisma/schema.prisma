@@ -16,27 +16,23 @@ model User {
 
   workflows  Workflow[]
   executions Execution[]
-  apiKeys    ApiKey[]
+  settings   Settings[]
 
   @@map("users")
 }
 
-// NEW: API Keys stored in database (encrypted)
-model ApiKey {
+model Settings {
   id        String   @id @default(cuid())
   userId    String
-  provider  String   // "openrouter", "nvidia", "huggingface"
-  name      String   // User-friendly name
-  keyValue  String   // Encrypted API key
-  isActive  Boolean  @default(true)
+  key       String   // "OPENROUTER_API_KEY", "NVIDIA_API_KEY", etc.
+  value     String   // Encrypted API key value
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  lastUsedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, provider])
-  @@map("api_keys")
+  @@unique([userId, key])
+  @@map("settings")
 }
 
 model Workflow {
@@ -130,8 +126,10 @@ model Execution {
   error     Json?
   
   createdAt DateTime @default(now())
+  createdBy String
   
   workflow      Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [createdBy], references: [id], onDelete: Cascade)
   nodeExecutions NodeExecution[]
 
   @@map("executions")

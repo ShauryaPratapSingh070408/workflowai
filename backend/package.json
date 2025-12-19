@@ -10,14 +10,11 @@
     "start": "node dist/index.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:seed": "tsx src/db/seed.ts",
-    "type-check": "tsc --noEmit",
-    "lint": "eslint src"
+    "db:push": "prisma db push",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@fastify/cors": "^8.4.2",
-    "@fastify/jwt": "^7.1.0",
-    "@fastify/rate-limit": "^8.0.1",
     "@prisma/client": "^5.8.0",
     "axios": "^1.6.5",
     "cheerio": "^1.0.0-rc.12",
@@ -33,9 +30,6 @@
   "devDependencies": {
     "@types/node": "^20.10.6",
     "@types/bcrypt": "^5.0.2",
-    "@typescript-eslint/eslint-plugin": "^6.17.0",
-    "@typescript-eslint/parser": "^6.17.0",
-    "eslint": "^8.56.0",
     "prisma": "^5.8.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
