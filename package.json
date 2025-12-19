@@ -1,0 +1,22 @@
+{
+  "name": "workflowai",
+  "version": "0.1.0",
+  "description": "Open-source workflow automation platform for research and content generation",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=frontend\" \"npm run dev --workspace=backend\"",
+    "build": "npm run build --workspaces",
+    "start": "npm start --workspaces",
+    "lint": "npm run lint --workspaces",
+    "type-check": "npm run type-check --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  }
+}
