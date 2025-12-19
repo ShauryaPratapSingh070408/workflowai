@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflows  Workflow[]
+  executions Execution[]
+  apiKeys    ApiKey[]
+
+  @@map("users")
+}
+
+// NEW: API Keys stored in database (encrypted)
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  provider  String   // "openrouter", "nvidia", "huggingface"
+  name      String   // User-friendly name
+  keyValue  String   // Encrypted API key
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("api_keys")
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  version     Int      @default(1)
+  
+  isActive Boolean @default(true)
+  
+  errorWorkflowId String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+  
+  user       User   @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  
+  nodes       WorkflowNode[]
+  connections WorkflowConnection[]
+  executions  Execution[]
+  tags        String[] @default([])
+  
+  previousVersionId String?
+
+  @@map("workflows")
+  @@index([createdBy])
+}
+
+model WorkflowNode {
+  id        String   @id @default(cuid())
+  workflowId String
+  
+  type    String
+  kind    String
+  name    String
+  
+  positionX Float
+  positionY Float
+  
+  config    Json    @default("{}")
+  disabled  Boolean @default(false)
+  
+  retryMaxRetries     Int     @default(0)
+  retryDelayMs        Int     @default(1000)
+  retryBackoffMultiplier Float @default(1)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  workflow       Workflow             @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sourceConnections WorkflowConnection[] @relation("source")
+  targetConnections WorkflowConnection[] @relation("target")
+
+  @@map("workflow_nodes")
+  @@index([workflowId])
+}
+
+model WorkflowConnection {
+  id              String @id @default(cuid())
+  workflowId      String
+  sourceNodeId    String
+  sourceOutput    String @default("success")
+  targetNodeId    String
+  targetInput     String @default("in")
+  
+  createdAt DateTime @default(now())
+  
+  workflow   Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sourceNode WorkflowNode   @relation("source", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode WorkflowNode   @relation("target", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_connections")
+  @@index([workflowId])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+}
+
+model Execution {
+  id        String   @id @default(cuid())
+  workflowId String
+  
+  status    String  @default("queued")
+  trigger   String  @default("manual")
+  
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  duration  Int?
+  
+  globalItems Json    @default("[]")
+  error     Json?
+  
+  createdAt DateTime @default(now())
+  
+  workflow      Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  nodeExecutions NodeExecution[]
+
+  @@map("executions")
+  @@index([workflowId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model NodeExecution {
+  id           String   @id @default(cuid())
+  executionId  String
+  nodeId       String
+  
+  status       String   @default("queued")
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  duration     Int?
+  
+  inputItems   Json     @default("[]")
+  outputItems  Json     @default("[]")
+  error        Json?
+  retryCount   Int      @default(0)
+  
+  createdAt    DateTime @default(now())
+  
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@map("node_executions")
+  @@index([executionId])
+  @@index([nodeId])
+}
