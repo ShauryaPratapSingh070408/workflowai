@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../lib/logger.js';
 
 const db = new PrismaClient();
 
@@ -13,7 +14,15 @@ export default async function executionRoutes(fastify: FastifyInstance) {
       const execution = await db.execution.findUnique({
         where: { id },
         include: {
-          nodeExecutions: true,
+          nodeExecutions: {
+            orderBy: { createdAt: 'asc' },
+          },
+          workflow: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       });
 
@@ -28,7 +37,17 @@ export default async function executionRoutes(fastify: FastifyInstance) {
   // List executions
   fastify.get('/executions', async (request, reply) => {
     const executions = await db.execution.findMany({
-      include: { nodeExecutions: true },
+      include: {
+        workflow: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: { nodeExecutions: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -44,7 +63,7 @@ export default async function executionRoutes(fastify: FastifyInstance) {
 
       const execution = await db.execution.update({
         where: { id },
-        data: { status: 'cancelled' },
+        data: { status: 'cancelled', finishedAt: new Date() },
       });
 
       return { success: true, execution };

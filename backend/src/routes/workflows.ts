@@ -1,5 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
+import { logger } from '../lib/logger.js';
+import { executeWorkflow } from '../services/execution-engine.js';
 
 const db = new PrismaClient();
 
@@ -8,28 +10,29 @@ export default async function workflowRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: any }>('/workflows', async (request, reply) => {
     try {
       const { name, description, nodes, connections } = request.body;
+      const userId = 'default-user';
 
       const workflow = await db.workflow.create({
         data: {
           name,
           description,
-          createdBy: 'default-user', // TODO: Get from JWT
+          createdBy: userId,
           nodes: {
             create: nodes.map((node: any) => ({
               type: node.type,
               kind: node.kind,
               name: node.name,
-              positionX: node.position.x,
-              positionY: node.position.y,
-              config: node.config,
+              positionX: node.position?.x || 0,
+              positionY: node.position?.y || 0,
+              config: node.config || {},
             })),
           },
           connections: {
             create: connections.map((conn: any) => ({
               sourceNodeId: conn.sourceNodeId,
-              sourceOutput: conn.sourceOutput,
+              sourceOutput: conn.sourceOutput || 'success',
               targetNodeId: conn.targetNodeId,
-              targetInput: conn.targetInput,
+              targetInput: conn.targetInput || 'in',
             })),
           },
         },
@@ -41,7 +44,7 @@ export default async function workflowRoutes(fastify: FastifyInstance) {
 
       return { success: true, workflow };
     } catch (error) {
-      fastify.log.error(error);
+      logger.error('Error creating workflow:', error);
       reply.status(400).send({ error: 'Failed to create workflow' });
     }
   });
@@ -74,6 +77,9 @@ export default async function workflowRoutes(fastify: FastifyInstance) {
       include: {
         nodes: true,
         connections: true,
+        _count: {
+          select: { executions: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -105,17 +111,17 @@ export default async function workflowRoutes(fastify: FastifyInstance) {
                 type: node.type,
                 kind: node.kind,
                 name: node.name,
-                positionX: node.position.x,
-                positionY: node.position.y,
-                config: node.config,
+                positionX: node.position?.x || 0,
+                positionY: node.position?.y || 0,
+                config: node.config || {},
               })),
             },
             connections: {
               create: connections.map((conn: any) => ({
                 sourceNodeId: conn.sourceNodeId,
-                sourceOutput: conn.sourceOutput,
+                sourceOutput: conn.sourceOutput || 'success',
                 targetNodeId: conn.targetNodeId,
-                targetInput: conn.targetInput,
+                targetInput: conn.targetInput || 'in',
               })),
             },
           },
@@ -127,21 +133,9 @@ export default async function workflowRoutes(fastify: FastifyInstance) {
 
         return { success: true, workflow };
       } catch (error) {
-        fastify.log.error(error);
+        logger.error('Error updating workflow:', error);
         reply.status(400).send({ error: 'Failed to update workflow' });
       }
-    }
-  );
-
-  // Delete workflow
-  fastify.delete<{ Params: { id: string } }>(
-    '/workflows/:id',
-    async (request, reply) => {
-      const { id } = request.params;
-
-      await db.workflow.delete({ where: { id } });
-
-      return { success: true };
     }
   );
 
@@ -151,6 +145,7 @@ export default async function workflowRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params;
       const { input } = request.body;
+      const userId = 'default-user';
 
       try {
         const workflow = await db.workflow.findUnique({
@@ -166,22 +161,37 @@ export default async function workflowRoutes(fastify: FastifyInstance) {
         const execution = await db.execution.create({
           data: {
             workflowId: id,
+            createdBy: userId,
             status: 'running',
             trigger: 'manual',
           },
         });
 
-        // TODO: Queue execution
-        // executeWorkflow(id, execution.id, input);
+        // Execute async
+        executeWorkflow(id, execution.id, input).catch((error) => {
+          logger.error('Workflow execution error:', error);
+        });
 
         return {
           success: true,
           execution: { id: execution.id, status: execution.status },
         };
       } catch (error) {
-        fastify.log.error(error);
+        logger.error('Error starting execution:', error);
         reply.status(500).send({ error: 'Failed to execute workflow' });
       }
+    }
+  );
+
+  // Delete workflow
+  fastify.delete<{ Params: { id: string } }>(
+    '/workflows/:id',
+    async (request, reply) => {
+      const { id } = request.params;
+
+      await db.workflow.delete({ where: { id } });
+
+      return { success: true };
     }
   );
 }
